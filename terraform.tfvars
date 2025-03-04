@@ -1,6 +1,6 @@
 gitlab_project_path = "torque4/lintingapp"
 github_owner        = "charungooa"
-github_repo_name    = "lintingapp"
+github_repo_name    = "newlinting"
 key_vault_name      = "gitlab-mig02"
 #gitlab_token        = "glpat-xxxxxxxxxxxxxxxxxxxx"
 #github_token        = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
