@@ -17,14 +17,7 @@ terraform {
       version = "~> 3.0"
     }
   }
-
-  backend "azurerm" {
-    resource_group_name  = "Backend-rg"
-    storage_account_name = "backednstg755"
-    container_name       = "backend-container"
-    key                  = "secmigrate.tfstate"
-    # key is provided dynamically via -backend-config in the workflow
-  }
+  # The backend "azurerm" block has been removed entirely
 }
 
 provider "github" {
