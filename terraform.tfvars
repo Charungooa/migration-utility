@@ -1,0 +1,6 @@
+gitlab_project_path = "torque4/builderapp"
+github_owner        = "charungooa"
+github_repo_name    = "builderapp"
+key_vault_name      = "gitlab-mig"
+#gitlab_token        = "glpat-xxxxxxxxxxxxxxxxxxxx"
+#github_token        = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
