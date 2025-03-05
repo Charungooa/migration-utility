@@ -1,6 +1,6 @@
 gitlab_project_path = "torque4/lintingapp"
 github_owner        = "charungooa"
-github_repo_name    = "newlinting"
+github_repo_name    = "imageprocess"
 key_vault_name      = "gitlab-mig02"
 #gitlab_token        = "glpat-xxxxxxxxxxxxxxxxxxx"
 #github_token        = "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
