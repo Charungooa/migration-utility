@@ -1,6 +1,11 @@
-# Data source for existing Azure Key Vault
-data "azurerm_key_vault" "existing_vault" {
-  name                = var.key_vault_name
+# Data sources for existing Azure Key Vaults
+data "azurerm_key_vault" "prod_vault" {
+  name                = "prod-apollo-keyvault"  # Hardcoded prod key vault
+  resource_group_name = var.azure_resource_group
+}
+
+data "azurerm_key_vault" "stage_vault" {
+  name                = "stage-apollo-keyvault"  # Hardcoded stage key vault
   resource_group_name = var.azure_resource_group
 }
 
@@ -14,67 +19,40 @@ data "gitlab_project_variables" "secrets" {
   project = data.gitlab_project.project.id
 }
 
-# Fetch individual variables for detailed access
+# Fetch individual variables along with their environment
 data "gitlab_project_variable" "variables" {
   for_each = toset([
     for v in data.gitlab_project_variables.secrets.variables : v.key
   ])
-  project = data.gitlab_project.project.id
-  key     = each.value
+  project     = data.gitlab_project.project.id
+  key         = each.value
 }
 
-# Define a mapping for secret environments if they are not in the name
-variable "secret_environment_map" {
-  type = map(string)
-  default = {
-    "api-key"   = "prod"
-    "db-secret" = "staging"
-    "test-var"  = "dev"
-  }
-}
-
-# Process and classify variables (masked vs. unmasked)
+# Extracting variables and their environment from GitLab
 locals {
-  masked_variables = {
+  all_variables = {
     for key, value in data.gitlab_project_variable.variables : key => {
       value       = value.value
-      environment = (
-        can(regex("dev", lower(key))) ? "dev" :
-        can(regex("staging", lower(key))) ? "staging" :
-        can(regex("prod", lower(key))) ? "prod" :
-        lookup(var.secret_environment_map, key, "unknown") # Fallback to predefined mapping
-      )
+      environment = lookup(value, "environment_scope", "unknown")  # Extract environment from GitLab
     }
-    if value.masked  # Assume `masked` indicates sensitive secrets
-  }
-
-  unmasked_variables = {
-    for key, value in data.gitlab_project_variable.variables : key => value.value
-    if !value.masked  # Assume `!masked` indicates non-sensitive data
   }
 }
 
-# Store masked (sensitive) variables in Azure Key Vault with Environment & Type
-resource "azurerm_key_vault_secret" "masked_secrets" {
-  for_each     = local.masked_variables
+# Store all variables in the correct Azure Key Vault based on their environment
+resource "azurerm_key_vault_secret" "all_secrets" {
+  for_each     = local.all_variables
   name         = replace(each.key, "_", "-")  # Sanitize key for Key Vault (no underscores)
   value        = each.value.value
-  key_vault_id = data.azurerm_key_vault.existing_vault.id
-  content_type = title(each.value.environment) # Dynamically set "Type" based on the environment
+  content_type = var.github_repo_name  # Use GitHub repo name as content_type
+
+  # Assign to the correct Key Vault based on the extracted environment
+  key_vault_id = each.value.environment == "prod" ? data.azurerm_key_vault.prod_vault.id : data.azurerm_key_vault.stage_vault.id
 
   tags = {
-    environment = each.value.environment  # Store environment as tag (dev, staging, prod)
+    environment = each.value.environment  # Store environment as a tag
   }
 
   lifecycle {
     ignore_changes = [value]  # Ignore changes to existing secret values
   }
-}
-
-# Store unmasked (non-sensitive) variables in GitHub repository variables
-resource "github_actions_variable" "unmasked_variables" {
-  for_each      = local.unmasked_variables
-  repository    = var.github_repo_name
-  variable_name = each.key
-  value         = each.value
 }
