@@ -37,24 +37,24 @@ data "gitlab_project_variable" "variables" {
   key     = each.value
 }
 
-# Extract existing secret names from both Key Vaults
+# Extract existing secret names from both Key Vaults (converted to valid format)
 locals {
   existing_secrets = toset(
     concat(
-      [for s in data.azurerm_key_vault_secrets.prod_existing_secrets.names : replace(s, "_", "-")],
-      [for s in data.azurerm_key_vault_secrets.stage_existing_secrets.names : replace(s, "_", "-")]
+      [for s in data.azurerm_key_vault_secrets.prod_existing_secrets.names : lower(replace(s, "_", "-"))],
+      [for s in data.azurerm_key_vault_secrets.stage_existing_secrets.names : lower(replace(s, "_", "-"))]
     )
   )
 
-  # Process all variables, prefixing only if they already exist in Azure Key Vault
+  # Process all variables, replacing underscores and ensuring uniqueness
   all_variables = {
     for key, value in data.gitlab_project_variable.variables :
-    (contains(local.existing_secrets, replace(key, "_", "-"))
-      ? lower(replace("${data.gitlab_project.project.path_with_namespace}-${key}", "/", "-"))
-      : replace(key, "_", "-")) => {
+    (contains(local.existing_secrets, lower(replace(key, "_", "-")))
+      ? lower(replace("${data.gitlab_project.project.path_with_namespace}-${key}", "[^a-zA-Z0-9-]", ""))
+      : lower(replace(key, "_", "-"))) => {
       value       = value.value
       environment = lookup(value, "environment_scope", "unknown")
-      repo_name   = data.gitlab_project.project.path_with_namespace
+      repo_name   = lower(replace(data.gitlab_project.project.path_with_namespace, "[^a-zA-Z0-9-]", ""))
     }
   }
 }
@@ -63,10 +63,10 @@ locals {
 resource "azurerm_key_vault_secret" "all_secrets" {
   for_each     = local.all_variables
 
-  # Name of the secret: If a duplicate exists, it gets prefixed; otherwise, it remains unchanged
+  # Valid name: Replace `_` with `-` and ensure it contains only allowed characters
   name         = each.key
   value        = each.value.value
-  content_type = var.github_repo_name  # Store the repo name in content_type for identification
+  content_type = each.value.repo_name  # Store the repo name in content_type for identification
 
   # Assign to the correct Key Vault based on the extracted environment
   key_vault_id = each.value.environment == "prod" ? data.azurerm_key_vault.prod_vault.id : data.azurerm_key_vault.stage_vault.id
