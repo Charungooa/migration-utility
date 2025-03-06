@@ -1,11 +1,11 @@
 # Data sources for Azure Key Vaults
 data "azurerm_key_vault" "prod_vault" {
-  name                = "prod-apollo-keyvault"
+  name                = "prod-apollo-keyvault-01"
   resource_group_name = var.azure_resource_group
 }
 
 data "azurerm_key_vault" "stage_vault" {
-  name                = "stage-apollo-keyvault"
+  name                = "stage-apollo-keyvault-01"
   resource_group_name = var.azure_resource_group
 }
 
