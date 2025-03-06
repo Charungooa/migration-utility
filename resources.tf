@@ -66,7 +66,7 @@ resource "azurerm_key_vault_secret" "all_secrets" {
   # Name of the secret: If a duplicate exists, it gets prefixed; otherwise, it remains unchanged
   name         = each.key
   value        = each.value.value
-  content_type = each.value.repo_name  # Store the repo name in content_type for identification
+  content_type = var.github_repo_name  # Store the repo name in content_type for identification
 
   # Assign to the correct Key Vault based on the extracted environment
   key_vault_id = each.value.environment == "prod" ? data.azurerm_key_vault.prod_vault.id : data.azurerm_key_vault.stage_vault.id
