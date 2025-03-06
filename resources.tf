@@ -1,12 +1,21 @@
 # Data sources for existing Azure Key Vaults
 data "azurerm_key_vault" "prod_vault" {
-  name                = "prod-apollo-keyvault"  # Hardcoded prod key vault
+  name                = "prod-apollo-keyvault"
   resource_group_name = var.azure_resource_group
 }
 
 data "azurerm_key_vault" "stage_vault" {
-  name                = "stage-apollo-keyvault"  # Hardcoded stage key vault
+  name                = "stage-apollo-keyvault"
   resource_group_name = var.azure_resource_group
+}
+
+# Fetch all existing secrets from both Azure Key Vaults
+data "azurerm_key_vault_secrets" "prod_existing_secrets" {
+  key_vault_id = data.azurerm_key_vault.prod_vault.id
+}
+
+data "azurerm_key_vault_secrets" "stage_existing_secrets" {
+  key_vault_id = data.azurerm_key_vault.stage_vault.id
 }
 
 # Fetch GitLab project
@@ -28,27 +37,24 @@ data "gitlab_project_variable" "variables" {
   key     = each.value
 }
 
-# Extracting variables and their environment from GitLab
+# Extract existing secret names from both Key Vaults
 locals {
-  # Count occurrences of each variable name across repositories
-  secret_counts = {
-    for key, value in data.gitlab_project_variable.variables :
-    replace(key, "_", "-") => length([
-      for v in data.gitlab_project_variables.secrets.variables : v.key
-      if replace(v.key, "_", "-") == replace(key, "_", "-")
-    ])
-  }
+  existing_secrets = toset(
+    concat(
+      [for s in data.azurerm_key_vault_secrets.prod_existing_secrets.names : replace(s, "_", "-")],
+      [for s in data.azurerm_key_vault_secrets.stage_existing_secrets.names : replace(s, "_", "-")]
+    )
+  )
 
-  # Process all variables, adding a prefix only for duplicate names
+  # Process all variables, prefixing only if they already exist in Azure Key Vault
   all_variables = {
     for key, value in data.gitlab_project_variable.variables :
-    # If secret name appears more than once, prefix it with the repo name
-    (local.secret_counts[replace(key, "_", "-")] > 1
+    (contains(local.existing_secrets, replace(key, "_", "-"))
       ? lower(replace("${data.gitlab_project.project.path_with_namespace}-${key}", "/", "-"))
       : replace(key, "_", "-")) => {
       value       = value.value
-      environment = lookup(value, "environment_scope", "unknown")  # Extract environment from GitLab
-      repo_name   = data.gitlab_project.project.path_with_namespace # Ensure repo name is stored
+      environment = lookup(value, "environment_scope", "unknown")
+      repo_name   = data.gitlab_project.project.path_with_namespace
     }
   }
 }
@@ -57,7 +63,7 @@ locals {
 resource "azurerm_key_vault_secret" "all_secrets" {
   for_each     = local.all_variables
 
-  # Name of the secret: Unique names remain unchanged, duplicate names are prefixed
+  # Name of the secret: If a duplicate exists, it gets prefixed; otherwise, it remains unchanged
   name         = each.key
   value        = each.value.value
   content_type = each.value.repo_name  # Store the repo name in content_type for identification
