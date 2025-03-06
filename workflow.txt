@@ -3,7 +3,7 @@ name: Migrate GitLab to GitHub
 on:
   push:
     paths:
-      - 'terraform.tfvars'
+      - 'terraform.tfvars'# Manual trigger without inputs
 
 env:
   TF_VERSION: 1.5.7
@@ -47,29 +47,8 @@ jobs:
           echo "TF_VAR_AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
           echo "TF_VAR_AZURE_CLIENT_OBJECT_ID=${{ secrets.AZURE_CLIENT_OBJECT_ID }}" >> $GITHUB_ENV
 
-      - name: Extract GitHub Repo Name
-        run: |
-          # Extract repo name from github.repository (format: owner/repo)
-          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
-          echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
-
-      - name: Terraform Init with Dynamic Backend Key
-        run: |
-          terraform init -backend-config="key=statefiles/${REPO_NAME}.tfstate" -lock-timeout=5m
-        env:
-          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-
-      - name: Select or Create Terraform Workspace
-        run: |
-          # Check if workspace exists, if not create it
-          if terraform workspace list | grep -q "${REPO_NAME}"; then
-            terraform workspace select "${REPO_NAME}"
-          else
-            terraform workspace new "${REPO_NAME}"
-          fi
+      - name: Terraform Init
+        run: terraform init -lock-timeout=5m
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
