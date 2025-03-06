@@ -41,20 +41,20 @@ data "gitlab_project_variable" "variables" {
 locals {
   existing_secrets = toset(
     concat(
-      [for s in data.azurerm_key_vault_secrets.prod_existing_secrets.names : lower(replace(s, "_", "-"))],
-      [for s in data.azurerm_key_vault_secrets.stage_existing_secrets.names : lower(replace(s, "_", "-"))]
+      [for s in data.azurerm_key_vault_secrets.prod_existing_secrets.names : lower(replace(s, "[^a-zA-Z0-9-]", "-"))],
+      [for s in data.azurerm_key_vault_secrets.stage_existing_secrets.names : lower(replace(s, "[^a-zA-Z0-9-]", "-"))]
     )
   )
 
   # Process all variables, replacing underscores and ensuring uniqueness
   all_variables = {
     for key, value in data.gitlab_project_variable.variables :
-    (contains(local.existing_secrets, lower(replace(key, "_", "-")))
-      ? lower(replace("${data.gitlab_project.project.path_with_namespace}-${key}", "[^a-zA-Z0-9-]", ""))
-      : lower(replace(key, "_", "-"))) => {
+    (contains(local.existing_secrets, lower(replace(key, "[^a-zA-Z0-9-]", "-")))
+      ? lower(replace("${data.gitlab_project.project.path_with_namespace}-${key}", "[^a-zA-Z0-9-]", "-"))
+      : lower(replace(key, "[^a-zA-Z0-9-]", "-"))) => {
       value       = value.value
       environment = lookup(value, "environment_scope", "unknown")
-      repo_name   = lower(replace(data.gitlab_project.project.path_with_namespace, "[^a-zA-Z0-9-]", ""))
+      repo_name   = lower(replace(data.gitlab_project.project.path_with_namespace, "[^a-zA-Z0-9-]", "-"))
     }
   }
 }
@@ -63,7 +63,7 @@ locals {
 resource "azurerm_key_vault_secret" "all_secrets" {
   for_each     = local.all_variables
 
-  # Valid name: Replace `_` with `-` and ensure it contains only allowed characters
+  # Valid name: Replace invalid characters with dashes
   name         = each.key
   value        = each.value.value
   content_type = each.value.repo_name  # Store the repo name in content_type for identification
