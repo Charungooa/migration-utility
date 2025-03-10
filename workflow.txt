@@ -72,3 +72,101 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_AZURE_CLIENT_OBJECT_ID: ${{ secrets.AZURE_CLIENT_OBJECT_ID }}
+...
+
+
+name: Migrate GitLab to GitHub
+
+on:
+  push:
+    paths:
+      - 'terraform.tfvars'
+
+env:
+  TF_VERSION: 1.5.7
+
+jobs:
+  migrate_secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Debug Azure Credentials
+        run: |
+          echo "Checking if secrets are set correctly..."
+          echo "AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}"
+          echo "AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+          echo "AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}"
+          echo "AZURE_CLIENT_OBJECT_ID: ${{ secrets.AZURE_CLIENT_OBJECT_ID }}"
+          echo "GH_PAT: ${{ secrets.GH_PAT }}"
+          echo "GL_PAT: ${{ secrets.GL_PAT }}"
+
+      - name: Set Environment Variables
+        run: |
+          # Set GitLab and GitHub tokens
+          echo "TF_VAR_gitlab_token=${{ secrets.GL_PAT }}" >> $GITHUB_ENV
+          echo "TF_VAR_github_token=${{ secrets.GH_PAT }}" >> $GITHUB_ENV
+
+          # Set Azure Credentials
+          echo "TF_VAR_AZURE_CLIENT_ID=${{ secrets.AZURE_CLIENT_ID }}" >> $GITHUB_ENV
+          echo "TF_VAR_AZURE_CLIENT_SECRET=${{ secrets.AZURE_CLIENT_SECRET }}" >> $GITHUB_ENV
+          echo "TF_VAR_AZURE_SUBSCRIPTION_ID=${{ secrets.AZURE_SUBSCRIPTION_ID }}" >> $GITHUB_ENV
+          echo "TF_VAR_AZURE_TENANT_ID=${{ secrets.AZURE_TENANT_ID }}" >> $GITHUB_ENV
+          echo "TF_VAR_AZURE_CLIENT_OBJECT_ID=${{ secrets.AZURE_CLIENT_OBJECT_ID }}" >> $GITHUB_ENV
+
+      - name: Extract GitHub Repo Name
+        run: |
+          # Extract repo name from github.repository (format: owner/repo)
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d '/' -f 2)
+          echo "REPO_NAME=$REPO_NAME" >> $GITHUB_ENV
+
+      - name: Terraform Init with Dynamic Backend Key
+        run: |
+          terraform init -backend-config="key=statefiles/${REPO_NAME}.tfstate" -lock-timeout=5m
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Select or Create Terraform Workspace
+        run: |
+          # Check if workspace exists, if not create it
+          if terraform workspace list | grep -q "${REPO_NAME}"; then
+            terraform workspace select "${REPO_NAME}"
+          else
+            terraform workspace new "${REPO_NAME}"
+          fi
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+      - name: Terraform Plan
+        run: terraform plan -var-file=terraform.tfvars -out=tfplan -input=false -lock-timeout=5m -no-color
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_AZURE_CLIENT_OBJECT_ID: ${{ secrets.AZURE_CLIENT_OBJECT_ID }}
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_AZURE_CLIENT_OBJECT_ID: ${{ secrets.AZURE_CLIENT_OBJECT_ID }}
