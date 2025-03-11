@@ -68,3 +68,21 @@ variable "AZURE_SUBSCRIPTION_ID" {
   type        = string
   description = "Azure subscription ID"
 }
+
+variable "key_vault_name_prod" {
+  description = "Name of existing Azure Key Vault"
+  type        = string
+  default     = "gitlabmigvault"
+}
+
+variable "key_vault_name_dev" {
+  description = "Name of existing Azure Key Vault"
+  type        = string
+  default     = "gitlabmigvault"
+}
+
+variable "key_vault_name_staging" {
+  description = "Name of existing Azure Key Vault"
+  type        = string
+  default     = "null"
+}
